@@ -38,18 +38,6 @@ def substrate_product(rxn):
                     return deborylated_prod, product
     return None
 
-def substrate_product_boron(rxn, mapped=True):
-    try:
-        substrate, product = substrate_product(rxn)
-    except TypeError:
-        return None
-'''     boron_source_list = [rct for rct in rxn.reactants if (getboroncount(rct)>0 and rct!=sub)]
-                if len(boron_source_list)<1:
-                    return None
-                for mol in boron_source_list:
-                    if str(mol) in ['CC1(C)OBOC1(C)C', 'CC1(C)OB(OC1(C)C)B2OC(C)(C)C(C)(C)O2']:
-                        return deborylated_prod, mol, product
-                    return deborylated_prod, boron_source_list[0], product'''
 
 def is_borylation(rxn):
     return substrate_product(rxn) is not None
