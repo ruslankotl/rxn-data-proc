@@ -11,6 +11,9 @@ from numpy import nan
 def molecules_identical(mol1, mol2):
     return mol1.HasSubstructMatch(mol2) & mol2.HasSubstructMatch(mol1)
 
+def smiles_identical(mol1, mol2):
+    return Chem.MolToSmiles(mol1)==Chem.MolToSmiles(mol2)
+
 # a relevant molecular template
 deborylation = rdChemReactions.ReactionFromSmarts('[#6:1][B]>>[#6:1]')
 
@@ -21,18 +24,18 @@ getboroncount = lambda mol : sum(1 for atom in mol.GetAtoms() if atom.GetAtomicN
 def unique_deborylation_single_step(mol):
     deborylation_products = list(chain.from_iterable(deborylation.RunReactants([mol])))
     deborylation_unique_products = []
+    deborylation_unique_smiles = set()
     
     for prod in deborylation_products:
-        unique = True
-        for u_prod in deborylation_unique_products:
-            unique ^= molecules_identical(prod, u_prod)
-        if unique:
+        prod_smiles = Chem.MolToSmiles(prod)
+        if prod_smiles not in deborylation_unique_smiles:
             deborylation_unique_products.append(prod)
+            deborylation_unique_smiles.add(prod_smiles)
     
     return deborylation_unique_products
     
 # generate all possible deborylation products
-def deque_deborylation(mol):
+def deque_deborylation(mol)->list:
     
     if getboroncount(mol)==1:
         return unique_deborylation_single_step(mol)
@@ -42,24 +45,24 @@ def deque_deborylation(mol):
     
     while (len(d)>0):
         current_deborylated = unique_deborylation_single_step(d.popleft())
+        current_deborylated_set = set()
         for prod in current_deborylated:
-            
-            unique = True
-            for u_prod in result:
-                unique ^= molecules_identical(prod, u_prod)
-            if unique:
+            prod_smiles = Chem.MolToSmiles(prod)
+            if prod_smiles not in current_deborylated_set:
                 result.append(prod)
                 d.append(prod)
+                current_deborylated_set.add(prod_smiles)
         
     
     return result[1:]
 
 # timeout is UNIX-specific, returns borylation substrate and product
 @timeout(0.1)
-def substrate_product(rxn, sanitize=True):
-    borylation = False
+def substrate_product(rxn_smiles:str, sanitize:bool=True)->tuple(str):
+    rxn = rdChemReactions.ReactionFromSmarts(rxn_smiles,useSmiles=True)
     products = [prod for prod in rxn.GetProducts() if getboroncount(prod)>0]
     reactants = rxn.GetReactants()
+    reactants_set = set(Chem.MolToSmiles(mol) for mol in reactants)
     if sanitize:
         try:
             [Chem.SanitizeMol(prod) for prod in products]
@@ -68,11 +71,10 @@ def substrate_product(rxn, sanitize=True):
             return None
     for product in products:
         deborylated_products = deque_deborylation(product)
-        for deborylated_product in deborylated_products:
-            for reactant in reactants:
-                borylation = molecules_identical(reactant, deborylated_product)
-                if borylation:
-                    return reactant, product
+        deborylated_set = set(Chem.MolToSmiles(prod) for prod in deborylated_products)
+        deborylated_and_reactant = list(deborylated_set&reactants_set)
+        if len(deborylated_and_reactant)>0:
+            return deborylated_and_reactant[0], Chem.MolToSmiles(product)
     return None
 
 # get substrate, boron source, and product for mapped reaction
