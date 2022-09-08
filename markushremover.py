@@ -21,7 +21,8 @@ def main(files, destination):
                     if 'MARKUSH' in line:
                         markush = True
                     current+=line
-                dest_file.write(current)
+                if not markush:
+                    dest_file.write(current)
     
     
 if __name__ == "__main__":
